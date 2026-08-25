@@ -46,18 +46,50 @@ npm -v
 
 ## Setup & Local Development
 
-1. **Clone the repository and navigate to the project directory:**
+### Option 1: Run Instantly via Docker Hub
+
+```bash
+docker run -d -p 5000:5000 prodsaas/movietrim:latest
+```
+
+### Option 2: Run Locally from Source
+
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/prodsaas/movietrim.git
+
    cd movietrim
    ```
 
-2. **Install dependencies:**
+2. **Choose your method:**
+
+   * **Method A: Run via npm**
+      ```bash
+      npm install
+
+      npm run dev
+      ```
+
+   * **Method B: Run via Docker**
+      ```bash
+      docker build -t movietrim .
+
+      docker run -p 5000:5000 --name movietrim-app movietrim
+      ```
+
+## Publishing on Docker Hub
+
+1. **Log in to Docker Hub**
    ```bash
-   npm install
+   docker login
    ```
 
-3. **Start the development server:**
+2. **Build and tag the image with your Docker Hub username**
    ```bash
-   npm run dev
+   docker build -t YOUR_DOCKER_HUB_USERNAME/movietrim:latest .
+   ```
+
+3. **Push the image to Docker Hub**
+   ```bash
+   docker push YOUR_DOCKER_HUB_USERNAME/movietrim:latest
    ```

@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
 				compilerOptions: {
 					runes: ({ filename }) => filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 				},
-				adapter: adapter({ precompress: true })
+				adapter: adapter({ precompress: true }),
+				csrf: { trustedOrigins: ["*"] }
 			}),
 			tailwindcss()
 		]

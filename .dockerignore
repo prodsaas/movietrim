@@ -1,0 +1,8 @@
+.git
+.svelte-kit
+build
+node_modules
+upload
+.env
+Dockerfile
+README.md

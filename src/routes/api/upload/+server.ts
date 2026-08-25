@@ -85,6 +85,8 @@ export const POST: RequestHandler = async ({ request }) => {
         await new Promise<void>((resolve, reject) => {
             const busboy = createBusboy({ headers: { 'content-type': contentType } });
 
+            const fileWritePromises: Promise<void>[] = [];
+
             busboy.on('field', (name, val) => {
                 if (name === 'filename') originalFilename = val.toLowerCase();
                 if (name === 'chunkIndex') chunkIndex = parseInt(val, 10);
@@ -115,11 +117,26 @@ export const POST: RequestHandler = async ({ request }) => {
                 }
 
                 const writeStream = createWriteStream(inputPath, { flags: chunkIndex === 0 ? 'w' : 'a' });
+
+                fileWritePromises.push(new Promise((res, rej) => {
+                    writeStream.on('close', res);
+                    writeStream.on('error', rej);
+                }));
+
                 writeStream.on('error', reject);
                 file.pipe(writeStream);
             });
 
-            busboy.on('finish', resolve);
+            busboy.on('finish', async () => {
+                try {
+                    await Promise.all(fileWritePromises);
+                    resolve();
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+
             busboy.on('error', reject);
 
             if (request.body) {
