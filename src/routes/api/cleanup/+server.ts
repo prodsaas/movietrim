@@ -15,25 +15,27 @@ export const POST: RequestHandler = async ({ request }) => {
         }
         else if (contentType.includes('application/json')) {
             const body = await request.json();
-            jobId = body?.jobId;
+            jobId = String(body?.jobId || '');
         }
         else {
             jobId = await request.text();
         }
 
-        if (!jobId || typeof jobId !== 'string') return json({ success: false });
+        if (!jobId || typeof jobId !== 'string') {
+            return json({ success: false, error: 'Invalid Job ID' }, { status: 400 });
+        }
 
         const ext = path.extname(jobId);
-        const baseId = ext ? path.basename(jobId, ext) : jobId;
-
+        const baseId = ext ? path.basename(jobId, ext) : path.basename(jobId);
         const uploadDir = path.resolve('./upload');
-        let files;
 
+        let files: string[] = [];
         try {
             files = await readdir(uploadDir);
         }
         catch (error: unknown) {
-            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return json({ success: true });
+            const err = error as NodeJS.ErrnoException;
+            if (err.code === 'ENOENT') return json({ success: true });
             throw error;
         }
 
@@ -52,8 +54,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
         return json({ success: true });
     }
-    catch (error) {
-        console.error('[Cleanup API] Critical Error:', error);
-        return json({ success: false });
+    catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error('[Cleanup API] Error:', msg);
+        return json({ success: false, error: 'Internal Server Error' }, { status: 500 });
     }
 };

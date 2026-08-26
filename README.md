@@ -46,13 +46,13 @@ npm -v
 
 ## Setup & Local Development
 
-### Option 1: Run Instantly via Docker Hub
+### Option 1: Run via Docker Hub
 
 ```bash
-docker run -d -p 5000:5000 prodsaas/movietrim:latest
+docker run -p 5000:5000 prodsaas/movietrim:latest
 ```
 
-### Option 2: Run Locally from Source
+### Option 2: Run from Source
 
 1. **Clone the repository:**
    ```bash

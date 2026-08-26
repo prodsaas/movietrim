@@ -36,38 +36,32 @@ async function deleteOldFiles() {
 
         for (const file of files) {
             if (file.startsWith('.')) continue;
-
             const filePath = path.join(uploadDir, file);
             const fileStat = await stat(filePath).catch(() => null);
 
             if (fileStat && fileStat.mtimeMs < twoHoursAgo) {
-                await unlink(filePath).catch((error: NodeJS.ErrnoException) => {
-                    if (error.code !== 'ENOENT') {
-                        console.warn(`[Upload API] GC failed to delete ${filePath}:`, error.message);
-                    }
-                });
+                await unlink(filePath).catch(() => { });
             }
         }
     }
-    catch (error) {
-        console.error('[Upload API] Garbage Collector Error:', error);
+    catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error('[Upload API] Delete Error:', msg);
     }
 }
 
-function getTrackLabel(stream: FFprobeStream, defaultName: string) {
+function formatTrackTitle(stream: FFprobeStream, defaultFallback: string) {
     const lang = stream.tags?.language;
     const title = stream.tags?.title;
     if (lang && title) return `${lang} - ${title}`;
     if (lang) return lang;
     if (title) return title;
-    return defaultName;
+    return defaultFallback;
 }
 
 export const POST: RequestHandler = async ({ request }) => {
     const contentType = request.headers.get('content-type') || '';
-    if (!contentType.includes('multipart/form-data')) {
-        return json({ error: 'Invalid content type' }, { status: 400 });
-    }
+    if (!contentType.includes('multipart/form-data')) return json({ error: 'Invalid content type' }, { status: 400 });
 
     const uploadDir = path.resolve('./upload');
     await mkdir(uploadDir, { recursive: true }).catch(() => { });
@@ -75,7 +69,6 @@ export const POST: RequestHandler = async ({ request }) => {
     let baseId: string = randomUUID();
     let jobId = '';
     let inputPath = '';
-
     let chunkIndex = 0;
     let totalChunks = 1;
     let providedJobId = '';
@@ -84,7 +77,6 @@ export const POST: RequestHandler = async ({ request }) => {
     try {
         await new Promise<void>((resolve, reject) => {
             const busboy = createBusboy({ headers: { 'content-type': contentType } });
-
             const fileWritePromises: Promise<void>[] = [];
 
             busboy.on('field', (name, val) => {
@@ -96,7 +88,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
             busboy.on('file', (fieldname, file, info) => {
                 const finalFilename = originalFilename || info.filename.toLowerCase();
-                const isValidExt = ['.mp4', '.mkv', '.avi', '.mov', '.webm'].some(validExt => finalFilename.endsWith(validExt));
+                const isValidExt = ['.mp4', '.mkv', '.avi', '.mov', '.webm'].some(ext => finalFilename.endsWith(ext));
 
                 if (!isValidExt) {
                     file.resume();
@@ -108,7 +100,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 if (chunkIndex === 0) {
                     jobId = `${baseId}${ext}`;
                     inputPath = path.join(uploadDir, `${baseId}_input${ext}`);
-                    deleteOldFiles().catch(console.error);
+                    deleteOldFiles();
                 }
                 else {
                     jobId = providedJobId;
@@ -141,7 +133,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
             if (request.body) {
                 const reader = (request.body as unknown as ReadableStream<Uint8Array>).getReader();
-                const processStream = async () => {
+                (async () => {
                     try {
                         while (true) {
                             const { done, value } = await reader.read();
@@ -151,11 +143,11 @@ export const POST: RequestHandler = async ({ request }) => {
                             }
                             if (value) busboy.write(value);
                         }
-                    } catch (err) {
+                    }
+                    catch (err) {
                         reject(err);
                     }
-                };
-                processStream();
+                })();
             }
             else {
                 reject(new Error('Empty request body'));
@@ -169,7 +161,7 @@ export const POST: RequestHandler = async ({ request }) => {
             try {
                 const { stdout } = await execFilePromise('ffprobe', [
                     '-v', 'quiet', '-print_format', 'json', '-show_streams', inputPath
-                ], { maxBuffer: 1024 * 1024 * 100 });
+                ], { maxBuffer: 100 * 1024 * 1024 });
 
                 const metadata = JSON.parse(stdout);
 
@@ -178,7 +170,7 @@ export const POST: RequestHandler = async ({ request }) => {
                         .filter((s: FFprobeStream) => s.codec_type === 'audio')
                         .map((s: FFprobeStream) => ({
                             index: s.index,
-                            title: getTrackLabel(s, `Audio Track ${s.index}`),
+                            title: formatTrackTitle(s, `Audio Track ${s.index}`),
                             isDefault: s.disposition?.default === 1
                         }));
 
@@ -186,30 +178,27 @@ export const POST: RequestHandler = async ({ request }) => {
                         .filter((s: FFprobeStream) => s.codec_type === 'subtitle')
                         .map((s: FFprobeStream) => ({
                             index: s.index,
-                            title: getTrackLabel(s, `Subtitle Track ${s.index}`)
+                            title: formatTrackTitle(s, `Subtitle Track ${s.index}`)
                         }));
                 }
             }
             catch (error: unknown) {
-                console.warn('[Upload API] FFprobe extraction warning:', (error as Error).message);
+                const msg = error instanceof Error ? error.message : String(error);
+                console.warn('[Upload API] FFprobe extraction warning:', msg);
             }
         }
 
         return json({ success: true, jobId, audios, subtitles });
     }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        
+        if (inputPath) unlink(inputPath).catch(() => { });
 
-        if (inputPath) {
-            unlink(inputPath).catch(() => { });
+        if (msg === 'INVALID_FILE_TYPE') {
+            return json({ error: 'Only video files (.mp4, .mkv, .avi, .mov, .webm) are allowed.' }, { status: 415 });
         }
-
-        if (errorMessage === 'INVALID_FILE_TYPE') {
-            console.warn('[Upload API] Blocked upload of invalid file type.');
-            return json({ error: 'Only video files (.mp4, .mkv, .avi, .mov, and .webm) are allowed.' }, { status: 415 });
-        }
-
-        console.error('[Upload API] Upload process failed:', errorMessage);
+        console.error('[Upload API] Upload process failed:', msg);
         return json({ error: 'Upload failed or connection aborted' }, { status: 500 });
     }
 };
