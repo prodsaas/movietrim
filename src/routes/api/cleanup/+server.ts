@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import path from 'path';
 import { readdir, unlink } from 'fs/promises';
-import { jobProgress } from '$lib/server/progress';
+import { jobProgress } from '#lib/server/progress.ts';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -22,7 +21,7 @@ export const POST: RequestHandler = async ({ request }) => {
         }
 
         if (!jobId || typeof jobId !== 'string') {
-            return json({ success: false, error: 'Invalid Job ID' }, { status: 400 });
+            return Response.json({ success: false, error: 'Invalid Job ID' }, { status: 400 });
         }
 
         const ext = path.extname(jobId);
@@ -35,7 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
         }
         catch (error: unknown) {
             const err = error as NodeJS.ErrnoException;
-            if (err.code === 'ENOENT') return json({ success: true });
+            if (err.code === 'ENOENT') return Response.json({ success: true });
             throw error;
         }
 
@@ -52,11 +51,11 @@ export const POST: RequestHandler = async ({ request }) => {
         await Promise.allSettled(deletePromises);
         jobProgress.delete(jobId);
 
-        return json({ success: true });
+        return Response.json({ success: true });
     }
     catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error('[Cleanup API] Error:', msg);
-        return json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+        return Response.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
     }
 };

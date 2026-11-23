@@ -1,4 +1,3 @@
-import { json } from '@sveltejs/kit';
 import { promisify } from 'util';
 import { exec, spawn } from 'child_process';
 import path from 'path';
@@ -7,7 +6,7 @@ import { pipeline } from 'stream/promises';
 import { createWriteStream } from 'fs';
 import { Readable } from 'stream';
 import type { ReadableStream } from 'stream/web';
-import { jobProgress } from '$lib/server/progress';
+import { jobProgress } from '#lib/server/progress.ts';
 import type { RequestHandler } from './$types';
 
 const execPromise = promisify(exec);
@@ -79,9 +78,9 @@ export const POST: RequestHandler = async ({ request }) => {
         const customSubtitleFile = formData.get('customSubtitle') as File | null;
 
         const timeRegex = /^\d+:[0-5]\d:[0-5]\d$/;
-        if (!startTime || !timeRegex.test(startTime)) return json({ error: 'Invalid Start Time format.' }, { status: 400 });
-        if (isNaN(duration) || duration <= 0) return json({ error: 'Invalid duration.' }, { status: 400 });
-        if (!jobId) return json({ error: 'Missing Job ID.' }, { status: 400 });
+        if (!startTime || !timeRegex.test(startTime)) return Response.json({ error: 'Invalid Start Time format.' }, { status: 400 });
+        if (isNaN(duration) || duration <= 0) return Response.json({ error: 'Invalid duration.' }, { status: 400 });
+        if (!jobId) return Response.json({ error: 'Missing Job ID.' }, { status: 400 });
 
         const ext = path.extname(jobId);
         const baseId = path.basename(jobId, ext);
@@ -94,7 +93,7 @@ export const POST: RequestHandler = async ({ request }) => {
         try {
             await stat(inputPath);
         } catch {
-            return json({ error: 'Source video not found. It may have been cleaned up.' }, { status: 404 });
+            return Response.json({ error: 'Source video not found. It may have been cleaned up.' }, { status: 404 });
         }
 
         if (customAudioFile && customAudioFile.size > 0) {
@@ -190,11 +189,11 @@ export const POST: RequestHandler = async ({ request }) => {
             }
         })();
 
-        return json({ success: true, message: 'Processing started' });
+        return Response.json({ success: true, message: 'Processing started' });
     }
     catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error('[Trim API] Error:', msg);
-        return json({ error: 'Failed to initialize processing' }, { status: 500 });
+        return Response.json({ error: 'Failed to initialize processing' }, { status: 500 });
     }
 };

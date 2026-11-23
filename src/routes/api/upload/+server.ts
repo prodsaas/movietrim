@@ -1,4 +1,3 @@
-import { json } from '@sveltejs/kit';
 import { promisify } from 'util';
 import { execFile } from 'child_process';
 import path from 'path';
@@ -61,7 +60,7 @@ function formatTrackTitle(stream: FFprobeStream, defaultFallback: string) {
 
 export const POST: RequestHandler = async ({ request }) => {
     const contentType = request.headers.get('content-type') || '';
-    if (!contentType.includes('multipart/form-data')) return json({ error: 'Invalid content type' }, { status: 400 });
+    if (!contentType.includes('multipart/form-data')) return Response.json({ error: 'Invalid content type' }, { status: 400 });
 
     const uploadDir = path.resolve('./upload');
     await mkdir(uploadDir, { recursive: true }).catch(() => { });
@@ -87,7 +86,7 @@ export const POST: RequestHandler = async ({ request }) => {
             });
 
             busboy.on('file', (fieldname, file, info) => {
-                const finalFilename = originalFilename || info.filename.toLowerCase();
+                const finalFilename = originalFilename || info.filename?.toLowerCase() || '';
                 const isValidExt = ['.mp4', '.mkv', '.avi', '.mov', '.webm'].some(ext => finalFilename.endsWith(ext));
 
                 if (!isValidExt) {
@@ -188,7 +187,7 @@ export const POST: RequestHandler = async ({ request }) => {
             }
         }
 
-        return json({ success: true, jobId, audios, subtitles });
+        return Response.json({ success: true, jobId, audios, subtitles });
     }
     catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -196,9 +195,9 @@ export const POST: RequestHandler = async ({ request }) => {
         if (inputPath) unlink(inputPath).catch(() => { });
 
         if (msg === 'INVALID_FILE_TYPE') {
-            return json({ error: 'Only video files (.mp4, .mkv, .avi, .mov, .webm) are allowed.' }, { status: 415 });
+            return Response.json({ error: 'Only video files (.mp4, .mkv, .avi, .mov, .webm) are allowed.' }, { status: 415 });
         }
         console.error('[Upload API] Upload process failed:', msg);
-        return json({ error: 'Upload failed or connection aborted' }, { status: 500 });
+        return Response.json({ error: 'Upload failed or connection aborted' }, { status: 500 });
     }
 };
